@@ -7,7 +7,7 @@ using namespace eosio;
 namespace stub {
 
 typedef std::vector<char> bytes;
-constexpr eosio::symbol token_symbol("EOS", 4u);
+constexpr eosio::symbol token_symbol("UOS", 4u);
 
 struct bridge_message_v0 {
     eosio::name        receiver;
