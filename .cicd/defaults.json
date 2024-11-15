@@ -1,6 +1,6 @@
 {
-    "leap-dev":{
-       "target":"5",
+    "antelope-spring-dev":{
+       "target":"1",
        "prerelease":false
     },
     "cdt":{

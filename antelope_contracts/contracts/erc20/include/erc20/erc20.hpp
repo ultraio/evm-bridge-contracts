@@ -56,7 +56,11 @@ class [[eosio::contract]] erc20 : public contract {
     [[eosio::action]] void withdrawfee(eosio::name token_contract, eosio::asset quantity, eosio::name to, std::string memo);
 
     [[eosio::action]] void unregtoken(eosio::name eos_contract_name, eosio::symbol_code token_symbol_code);
-    [[eosio::action]] void setconfig(std::optional<eosio::name> evm_account, std::optional<eosio::symbol> gas_token_symbol, std::optional<uint64_t> gaslimit, std::optional<uint64_t> init_gaslimit);
+
+    [[eosio::action]] void init(eosio::name evm_account, eosio::symbol gas_token_symbol, uint64_t gaslimit, uint64_t init_gaslimit);
+
+    [[eosio::action]] void setgaslimit(std::optional<uint64_t> gaslimit, std::optional<uint64_t> init_gaslimit);
+    [[eosio::action]] void callupgrade(eosio::name token_contract, eosio::symbol token_symbol);
     
     struct [[eosio::table("implcontract")]] impl_contract_t {
         uint64_t id = 0;
@@ -115,17 +119,17 @@ class [[eosio::contract]] erc20 : public contract {
         EOSLIB_SERIALIZE(config_t, (evm_gaslimit)(evm_init_gaslimit)(evm_account)(evm_gas_token_symbol));
     };
     typedef eosio::singleton<"config"_n, config_t> config_singleton_t;
+
     config_t get_config() const {
         config_singleton_t config(get_self(), get_self().value);
-        if (!config.exists()) {
-            return config_t{};
-        } else {
-            return config.get();
-        }
+        eosio::check(config.exists(), "erc20 config not exist");
+        return config.get();
     }
-    intx::uint256 get_minimum_natively_representable() const {
-        return intx::exp(10_u256, intx::uint256(evm_precision - get_config().evm_gas_token_symbol.precision()));
+
+    intx::uint256 get_minimum_natively_representable(const config_t& config) const {
+        return intx::exp(10_u256, intx::uint256(evm_precision - config.evm_gas_token_symbol.precision()));
     }
+    
     void set_config(const config_t &v) {
         config_singleton_t config(get_self(), get_self().value);
         config.set(v, get_self());
@@ -133,6 +137,7 @@ class [[eosio::contract]] erc20 : public contract {
 
     uint64_t get_next_nonce();
     void handle_erc20_transfer(const token_t &token, eosio::asset quantity, const std::string &memo);
+    void handle_call_upgrade(const bytes& proxy_address);
 
 private:
     eosio::name receiver_account()const;

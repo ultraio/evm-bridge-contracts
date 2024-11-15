@@ -14,7 +14,6 @@
 #include <vector>
 
 #include "erc20_tester.hpp"
-#include <erc20/bytecode.hpp>
 
 using namespace eosio;
 using namespace eosio::chain;
@@ -25,7 +24,11 @@ using mvo = fc::mutable_variant_object;
 using intx::operator""_u256;
 constexpr size_t kAddressLength{20};
 
-struct it_tester : erc20_tester {
+constexpr eosio::chain::name btc_evm_account{"btc.evm"_n};
+constexpr eosio::chain::name btc_token_account {"btcbtcbtcbtc"_n};
+const eosio::chain::symbol btc_symbol{8, "BTC"};
+
+struct diff_gas_token_tester : erc20_tester {
     std::string address_str32(const evmc::address& x) {
         std::stringstream hex_ss;
         for (uint8_t c : x.bytes) {
@@ -83,14 +86,14 @@ struct it_tester : erc20_tester {
     }
 
     std::string evm_address;
-    it_tester() : erc20_tester(true) {
+    diff_gas_token_tester() : erc20_tester(true, btc_evm_account, btc_symbol.to_string(), btc_token_account) {
         create_accounts({"alice"_n});
-        transfer_token(eos_token_account, faucet_account_name, "alice"_n, make_asset(10000'0000));
+        transfer_token(btc_token_account, faucet_account_name, "alice"_n, make_asset(100'0000'0000, btc_symbol));
         produce_block();
         transfer_token(token_account, faucet_account_name, "alice"_n, make_asset(10000'0000, token_symbol));
         produce_block();
         create_accounts({"bob"_n});
-        transfer_token(eos_token_account, faucet_account_name, "bob"_n, make_asset(10000'0000));
+        transfer_token(btc_token_account, faucet_account_name, "bob"_n, make_asset(100'0000'0000, btc_symbol));
         produce_block();
         transfer_token(token_account, faucet_account_name, "bob"_n, make_asset(10000'0000, token_symbol));
 
@@ -231,15 +234,15 @@ struct it_tester : erc20_tester {
     }
 };
 
-BOOST_AUTO_TEST_SUITE(erc20_tests)
+BOOST_AUTO_TEST_SUITE(different_gas_token_tests)
 
-BOOST_FIXTURE_TEST_CASE(it_basic_transfer, it_tester)
+BOOST_FIXTURE_TEST_CASE(basic_transfer_test, diff_gas_token_tester)
 try {
     evm_eoa evm1;
     auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
 
-    // Give evm1 some EOS
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
+    // Give evm1 some BTC
+    transfer_token(btc_token_account, "alice"_n, btc_evm_account, make_asset(1'00000000, btc_symbol), evm1.address_0x().c_str());
     produce_block();
 
 
@@ -274,98 +277,14 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(it_upgrade, it_tester)
-try {
-
-    
-
-    evm_eoa evm1;
-    auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
-
-    // Give evm1 some EOS
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
-    produce_block();
-
-
-    // USDT balance should be zero
-    auto bal = balanceOf(evm1.address_0x().c_str());
-    BOOST_REQUIRE(bal == 0);
-
-    produce_block();
-
-    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000, token_symbol), evm1.address_0x().c_str());
-
-    bal = balanceOf(evm1.address_0x().c_str());
-    BOOST_REQUIRE(bal == 990000);
-    BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
-    auto tokenInfo = getRegistedTokenInfo();
-    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
-    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
-
-    produce_block();
-
-    auto fee = egressFee();
-    // received = 1000/1e6*1e4 = 10
-    bridgeTransferERC20(evm1, addr_alice, 1000, "aaa", fee);
-    produce_block();
-
-    bal = balanceOf(evm1.address_0x().c_str());
-
-    BOOST_REQUIRE(bal == 989000);
-    bal = get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount();
-
-    BOOST_REQUIRE(99990010 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
-
-    // upgrade 
-
-    evm_eoa deployer;
-    evmc::address impl_addr = silkworm::create_address(deployer.address, deployer.next_nonce); 
-
-    transfer_token(eos_token_account, faucet_account_name, evmin_account, make_asset(1000000, eos_token_symbol), deployer.address_0x().c_str());
-
-    auto txn = prepare_deploy_contract_tx(solidity::erc20::bytecode, sizeof(solidity::erc20::bytecode), 10'000'000);
-
-    deployer.sign(txn);
-    pushtx(txn);
-    produce_block();
-
-    push_action(erc20_account, "upgradeto"_n, erc20_account, mvo()("impl_address",fc::variant(impl_addr).as_string()));
-
-    produce_block();
-
-    push_action(erc20_account, "callupgrade"_n, erc20_account, mvo()("token_contract",token_account)("token_symbol",symbol::from_string("4,USDT")));
-
-    produce_block();
-
-    // Perform some basic tests again
-
-    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000, token_symbol), evm1.address_0x().c_str());
-
-    bal = balanceOf(evm1.address_0x().c_str());
-
-    BOOST_REQUIRE(bal == 989000 + 990000);
-
-    fee = egressFee();
-    // received = 1000/1e6*1e4 = 10
-    bridgeTransferERC20(evm1, addr_alice, 1000, "aaa", fee);
-    produce_block();
-
-    bal = balanceOf(evm1.address_0x().c_str());
-
-    BOOST_REQUIRE(bal == 989000 * 2);
-
-}
-FC_LOG_AND_RETHROW()
-
-BOOST_FIXTURE_TEST_CASE(it_unregtoken, it_tester)
+BOOST_FIXTURE_TEST_CASE(unregtoken_test, diff_gas_token_tester)
 try {
     evm_eoa evm1;
     auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
 
-    // Give evm1 some EOS
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
+    // Give evm1 some BTC
+    transfer_token(btc_token_account, "alice"_n, btc_evm_account, make_asset(10'00000000, btc_symbol), evm1.address_0x().c_str());
     produce_block();
-
 
     // USDT balance should be zero
     auto bal = balanceOf(evm1.address_0x().c_str());
@@ -400,7 +319,7 @@ try {
         eosio_assert_message_is("ERC-20 token not registerred"));
 
     // register token again (imply a different ERC-EVM address)
-    push_action(erc20_account, "regtoken"_n, erc20_account, mvo()("eos_contract_name",token_account.to_string())("evm_token_name","EVM USDT V2")("evm_token_symbol","WUSDT")("ingress_fee","0.0100 USDT")("egress_fee","0.0100 EOS")("erc20_precision",6));
+    push_action(erc20_account, "regtoken"_n, erc20_account, mvo()("eos_contract_name",token_account.to_string())("evm_token_name","EVM USDT V2")("evm_token_symbol","WUSDT")("ingress_fee","0.0100 USDT")("egress_fee", make_asset(100))("erc20_precision",6));
 
     // EOS->EVM: alice transfer 2 USDT to evm1 in EVM (new ERC-EVM address)
     transfer_token(token_account, "alice"_n, erc20_account, make_asset(20000, token_symbol), evm1.address_0x().c_str());
@@ -428,12 +347,12 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(it_eos_to_evm, it_tester)
+BOOST_FIXTURE_TEST_CASE(eos_to_evm_test, diff_gas_token_tester)
 try {
     evm_eoa evm1;
     auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
-    // Give evm1 some EOS
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
+    // Give evm1 some BTC
+    transfer_token(btc_token_account, "alice"_n, btc_evm_account, make_asset(1'00000000, btc_symbol), evm1.address_0x().c_str());
     produce_block();
 
 
@@ -507,12 +426,12 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(it_evm_to_eos, it_tester)
+BOOST_FIXTURE_TEST_CASE(evm_to_eos_test, diff_gas_token_tester)
 try {
     evm_eoa evm1;
     auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
-    // Give evm1 some EOS
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
+    // Give evm1 some BTC
+    transfer_token(btc_token_account, "alice"_n, btc_evm_account, make_asset(1'00000000, btc_symbol), evm1.address_0x().c_str());
     produce_block();
 
     transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000100, token_symbol), evm1.address_0x().c_str());
@@ -559,12 +478,12 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(it_set_ingress_fee, it_tester)
+BOOST_FIXTURE_TEST_CASE(set_ingress_fee_test, diff_gas_token_tester)
 try {
     evm_eoa evm1;
     auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
-    // Give evm1 some EOS
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
+    // Give evm1 some BTC
+    transfer_token(btc_token_account, "alice"_n, btc_evm_account, make_asset(1'00000000, btc_symbol), evm1.address_0x().c_str());
     produce_block();
 
     transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000100, token_symbol), evm1.address_0x().c_str());
@@ -615,9 +534,9 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(it_set_egress_fee, it_tester)
+BOOST_FIXTURE_TEST_CASE(set_egress_fee_test, diff_gas_token_tester)
 try {
-    constexpr intx::uint256 minimum_natively_representable = intx::exp(10_u256, intx::uint256(18 - 4));
+    constexpr intx::uint256 minimum_natively_representable = intx::exp(10_u256, intx::uint256(18 - 8));
 
     BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setegressfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(50))),
@@ -636,7 +555,7 @@ try {
 
     produce_block();
    
-    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setegressfee"_n, evm_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setegressfee"_n, btc_evm_account, 
         mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(1000))),
         missing_auth_exception, eosio::testing::fc_exception_message_starts_with("missing authority of eosio.erc2o"));
 
@@ -645,12 +564,12 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(it_withdraw_fees, it_tester)
+BOOST_FIXTURE_TEST_CASE(withdraw_fees_test, diff_gas_token_tester)
 try {
     evm_eoa evm1;
     auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
-    // Give evm1 some EOS
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
+    // Give evm1 some BTC
+    transfer_token(btc_token_account, "alice"_n, btc_evm_account, make_asset(1'00000000, btc_symbol), evm1.address_0x().c_str());
     produce_block();
 
     transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000100, token_symbol), evm1.address_0x().c_str());
@@ -691,70 +610,5 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(it_eos_to_evm_with_proxy, it_tester)
-try {
-    evm_eoa evm1;
-    auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
-    // Give evm1 some EOS
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
-    produce_block();
-
-
-    // USDT balance should be zero
-    auto bal = balanceOf(evm1.address_0x().c_str());
-    BOOST_REQUIRE(bal == 0);
-    produce_block();
-
-    transfer_token(token_account, "alice"_n, evmin_account, make_asset(10000, token_symbol), evm1.address_0x().c_str());
-    bal = balanceOf(evm1.address_0x().c_str());
-    BOOST_REQUIRE(bal == 990000); // +1000000 - 10000
-    BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // -10000
-    auto tokenInfo = getRegistedTokenInfo();
-    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
-    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
-    produce_block();
-
-    BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, evmin_account, make_asset(0, token_symbol), evm1.address_0x().c_str()),
-                            eosio_assert_message_exception, eosio_assert_message_is("must transfer positive quantity"));
-    bal = balanceOf(evm1.address_0x().c_str());
-    BOOST_REQUIRE(bal == 990000);
-    BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
-    tokenInfo = getRegistedTokenInfo();
-    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
-    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
-    produce_block();
-
-
-    BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, evmin_account, make_asset(10, token_symbol), evm1.address_0x().c_str()),
-                            eosio_assert_message_exception, eosio_assert_message_is("deposit amount must be greater than ingress fee"));
-    bal = balanceOf(evm1.address_0x().c_str());
-    BOOST_REQUIRE(bal == 990000);
-    BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
-    tokenInfo = getRegistedTokenInfo();
-    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
-    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
-    produce_block();
-
-    BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, evmin_account, make_asset(100, token_symbol), evm1.address_0x().c_str()),
-                            eosio_assert_message_exception, eosio_assert_message_is("deposit amount must be greater than ingress fee"));
-    bal = balanceOf(evm1.address_0x().c_str());
-    BOOST_REQUIRE(bal == 990000);
-    BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
-    tokenInfo = getRegistedTokenInfo();
-    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
-    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
-    produce_block();
-
-    transfer_token(token_account, "alice"_n, evmin_account, make_asset(101, token_symbol), evm1.address_0x().c_str());
-    bal = balanceOf(evm1.address_0x().c_str());
-    BOOST_REQUIRE(bal == 990100); // 9900000 + (10100 - 10000)
-    BOOST_REQUIRE(99989899 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 99990000 - 101
-    tokenInfo = getRegistedTokenInfo();
-    BOOST_REQUIRE(tokenInfo.balance == make_asset(9901, token_symbol));
-    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(200, token_symbol));
-    produce_block();
-
-}
-FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
