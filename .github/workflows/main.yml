@@ -1,0 +1,41 @@
+name: "Release EVM bridge contracts"
+on:
+  workflow_dispatch:
+    inputs:
+      contracts:
+        description: Release version tag
+        required: true
+      evm-contract:
+        description: EVM contract release tag
+        required: false
+        default: v1.0.0
+      eosio:
+        description: EOSIO release tag
+        required: true
+      cdt-tag:
+        description: CDT release tag
+        required: true
+      cdt-version:
+        description: CDT version where cdt being installed
+        required: false
+        default: 3.1.0
+jobs:
+  # Setup Main Dependencies Here
+  setup-dependencies:
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    name: "Build contracts"
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    container:
+      # This repository can be found / pushed to in: ultraio/eosio-docker-starter
+      image: quay.io/ultra.io/eosio-docker-starter:5.0.0
+      options: --cpus 2
+    steps:
+      - name: Get Token
+        id: application_token
+        uses: peter-murray/workflow-application-token-action@v2
+        with:
+          application_id: ${{ secrets.APPLICATION_ID }}
+          application_private_key: ${{ secrets.APPLICATION_PRIVATE_KEY }}
