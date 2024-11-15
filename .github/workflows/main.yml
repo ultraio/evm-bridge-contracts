@@ -47,6 +47,7 @@ jobs:
           echo "CDT_TAG=${{ github.event.inputs.cdt-tag }}" >> $GITHUB_ENV
           echo "CDT_VERSION=${{ github.event.inputs.cdt-tag }}" >> $GITHUB_ENV
           echo "ULTRA_PATH=/__w/eos-evm-contract/eos-evm-contract/ultra/" >> $GITHUB_ENV
+          echo "EVM_CONTRACT_VERSION=${{ github.event.inputs.evm-contract }}" >> $GITHUB_ENV
 
       # Update dependencies
       - name: 'Update dependencies'
@@ -93,14 +94,14 @@ jobs:
       - name: Install EOSIO Debian Image
         run: apt install ./ultra/eosio-${{ env.EOSIO_VERSION }}.deb -y
 
-      # Download the EOSIO Deb
+      # Download the EVM contract
       - name: Download EVM contract release
         uses: Legion2/download-release-action@v2.1.0
         with:
           repository: ultraio/eos-evm-contract
           tag: '${{ github.event.inputs.evm-contract }}'
           path: ./ultra
-          file:  eosio-${{ env.EOSIO_VERSION }}.tar.gz
+          file:  eos-evm-contract-${{ env.EVM_CONTRACT_VERSION }}.tar.gz
           token: '${{ steps.application_token.outputs.token }}'
 
       - name: Run nodeos
@@ -132,7 +133,7 @@ jobs:
         id: evm-contract
         run: |
           mkdir contract
-          mv contract.tar.gz contract/
+          mv ./ultra/eos-evm-contract-*.tar.gz contract/contract.tar.gz
           cd contract
           tar xvf contract.tar.gz
           cd build
@@ -154,32 +155,32 @@ jobs:
 
       # Build EOSIO.CONTRACTS Repository
       # This one builds with the -g tag when it is present.
-      - name: Code Hash Generations
-        working-directory: ./
-        run: |
-          ./.github/workflows/generate_code_hash.sh
-          sed 's/^/* /;s/$//' ./build/evm_runtime/hash.txt >> ./CHANGELOG.txt
-          mv ./build/evm_runtime/hash.txt ./build/evm_runtime/eos-evm-contract-${{ env.RELEASE_VERSION }}-hash.txt
+      # - name: Code Hash Generations
+      #   working-directory: ./
+      #   run: |
+      #     ./.github/workflows/generate_code_hash.sh
+      #     sed 's/^/* /;s/$//' ./build/evm_runtime/hash.txt >> ./CHANGELOG.txt
+      #     mv ./build/evm_runtime/hash.txt ./build/evm_runtime/eos-evm-contract-${{ env.RELEASE_VERSION }}-hash.txt
 
-      - name: ZIP Contracts and rename code hash
-        working-directory: ./build/evm_runtime
-        run: |
-          rm -rf ./CMakeFiles
-          find ../evm_runtime -type f \( -name \*\.abi -o -name \*\.wasm \) | xargs tar -rf eos-evm-contract-${{ env.RELEASE_VERSION }}.tar.gz
-          sha256sum ./eos-evm-contract-${{ env.RELEASE_VERSION }}.tar.gz > eos-evm-contract-${{ env.RELEASE_VERSION }}-checksum.txt
+      # - name: ZIP Contracts and rename code hash
+      #   working-directory: ./build/evm_runtime
+      #   run: |
+      #     rm -rf ./CMakeFiles
+      #     find ../evm_runtime -type f \( -name \*\.abi -o -name \*\.wasm \) | xargs tar -rf eos-evm-contract-${{ env.RELEASE_VERSION }}.tar.gz
+      #     sha256sum ./eos-evm-contract-${{ env.RELEASE_VERSION }}.tar.gz > eos-evm-contract-${{ env.RELEASE_VERSION }}-checksum.txt
 
-      - name: Release with Code Hashes
-        uses: ultraio/action-gh-release@master
-        env:
-          GITHUB_TOKEN: ${{ steps.application_token.outputs.token }}
-        with:
-          name: Release ${{ env.RELEASE_VERSION }}
-          tag_name: ${{ env.RELEASE_VERSION }}
-          files: |
-            ./build/evm_runtime/eos-evm-contract-${{ env.RELEASE_VERSION }}.tar.gz
-            ./build/evm_runtime/*-checksum.txt
-            ./build/evm_runtime/*-hash.txt
-          body_path: ./CHANGELOG.txt
-          retries: 3
-          retry_interval: 1000
-          delete_on_existing: true
+      # - name: Release with Code Hashes
+      #   uses: ultraio/action-gh-release@master
+      #   env:
+      #     GITHUB_TOKEN: ${{ steps.application_token.outputs.token }}
+      #   with:
+      #     name: Release ${{ env.RELEASE_VERSION }}
+      #     tag_name: ${{ env.RELEASE_VERSION }}
+      #     files: |
+      #       ./build/evm_runtime/eos-evm-contract-${{ env.RELEASE_VERSION }}.tar.gz
+      #       ./build/evm_runtime/*-checksum.txt
+      #       ./build/evm_runtime/*-hash.txt
+      #     body_path: ./CHANGELOG.txt
+      #     retries: 3
+      #     retry_interval: 1000
+      #     delete_on_existing: true
