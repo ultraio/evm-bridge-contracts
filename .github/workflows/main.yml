@@ -101,7 +101,7 @@ jobs:
           repository: ultraio/eos-evm-contract
           tag: '${{ github.event.inputs.evm-contract }}'
           path: ./ultra
-          file:  eos-evm-contract-${{ env.EVM_CONTRACT_VERSION }}.tar.gz
+          file:  build.tar.gz
           token: '${{ steps.application_token.outputs.token }}'
 
       - name: Run nodeos
@@ -135,7 +135,7 @@ jobs:
         run: |
           ls -l
           mkdir contract
-          mv ./ultra/eos-evm-contract-*.tar.gz contract/contract.tar.gz
+          mv ./ultra/build.tar.gz contract/contract.tar.gz
           cd contract
           tar xvf contract.tar.gz
           cd build
