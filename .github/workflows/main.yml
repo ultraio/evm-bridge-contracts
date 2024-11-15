@@ -55,6 +55,13 @@ jobs:
           apt-get update -y \
           && apt-get install tree clang jq xxd -y
 
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Setup solc
+        run: npm install -g solc@0.8.21
+
       - name: Checkout Repo
         uses: actions/checkout@v4
         with:
