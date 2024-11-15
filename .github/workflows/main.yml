@@ -146,7 +146,7 @@ jobs:
         run: |
           ls -l
           pushd evm-bridge-contracts
-          cmake -B build -Deosevm_DIR=${{ steps.evm-contract.outputs.EVM_CONTRACT }}
+          cmake -B build -Deosevm_DIR=${{ steps.evm-contract.outputs.EVM_CONTRACT }} -DENABLE_TESTS=false
           cmake --build build -- -j
           tar -pc build | zstd --long -T0 -9 > build.tar.zst
 

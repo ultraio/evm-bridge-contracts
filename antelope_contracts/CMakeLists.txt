@@ -2,6 +2,9 @@ include(ExternalProject)
 
 find_package(cdt REQUIRED)
 
+option(ENABLE_TESTS
+   "Enables tests" ON)
+
 ExternalProject_Add(
    contracts
    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/contracts/
@@ -17,4 +20,6 @@ ExternalProject_Add(
 
 set(ANTELOPE_CONTRACTS_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/contracts )
 set(ANTELOPE_CONTRACTS_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/contracts )
-add_subdirectory (tests)
+if (ENABLE_TESTS)
+   add_subdirectory (tests)
+endif()
