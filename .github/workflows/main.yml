@@ -142,6 +142,7 @@ jobs:
           echo "EVM_CONTRACT=$(pwd)" >> "$GITHUB_OUTPUT"
 
       - name: Build EVM Bridge Contracts
+        shell: bash
         run: |
           ls -l
           pushd evm-bridge-contracts
