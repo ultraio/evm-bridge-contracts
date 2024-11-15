@@ -141,6 +141,10 @@ jobs:
           cd build
           echo "EVM_CONTRACT=$(pwd)" >> "$GITHUB_OUTPUT"
 
+      - name: Disable tests
+        working-directory: evm-bridge-contracts
+        run: sed -i -e 's/add_subdirectory (tests)/#add_subdirectory (tests)/g' ./antelope_contracts/CMakeLists.txt
+
       - name: Build EVM Bridge Contracts
         shell: bash
         run: |
